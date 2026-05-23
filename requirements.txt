@@ -3,7 +3,7 @@ uvicorn[standard]
 numpy
 scipy
 shapely
-supabase==2.3.0
+supabase
 python-dotenv
 pydantic
 psutil

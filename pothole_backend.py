@@ -25,6 +25,7 @@ CHANGES IN v1.2:
 # ---------------------------------------------------------------------------
 import os
 import json
+import math
 import time
 import logging
 import asyncio
@@ -416,17 +417,19 @@ def process_event_math(event: PotholeEventIn) -> None:
     """
     severity = score_severity(event.accel_burst)
 
-    # Duplicate guard: same device within the last 24 h
-    existing = (
+    # Duplicate guard: same device AND same location within the last 24 h.
+    # A device may report multiple potholes as long as each is outside the cluster radius.
+    recent = (
         supabase.table("events")
-        .select("event_id")
+        .select("latitude, longitude")
         .eq("device_id", event.device_id)
         .gte("detected_at", _yesterday_iso())
         .execute()
     )
-    if existing.data:
-        logger.info(f"Duplicate — device {event.device_id[:8]} already reported today.")
-        return
+    for prev in recent.data:
+        if _haversine_m(event.latitude, event.longitude, prev["latitude"], prev["longitude"]) < CLUSTER_RADIUS_M:
+            logger.info(f"Duplicate — device {event.device_id[:8]} already reported this location today.")
+            return
 
     pothole_id = find_nearby_pothole(event.latitude, event.longitude)
     pothole_id = upsert_pothole(
@@ -705,6 +708,15 @@ async def startup_event():
 
 def _yesterday_iso() -> str:
     return (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    R = 6_371_000
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
 
 
 # =============================================================================
