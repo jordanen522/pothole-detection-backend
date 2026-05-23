@@ -317,17 +317,25 @@ def upsert_pothole(
 
     current = (
         supabase.table("potholes")
-        .select("severity_score, hit_count")
+        .select("canonical_lat, canonical_lng, severity_score, hit_count")
         .eq("pothole_id", pothole_id)
         .single()
         .execute()
     )
+    old_lat      = current.data["canonical_lat"]
+    old_lng      = current.data["canonical_lng"]
     old_severity = current.data["severity_score"]
     old_count    = current.data["hit_count"]
     new_count    = old_count + 1
+
+    # Rolling average for position and severity
+    new_lat      = round((old_lat * old_count + lat) / new_count, 7)
+    new_lng      = round((old_lng * old_count + lng) / new_count, 7)
     new_severity = round((old_severity * old_count + severity) / new_count, 4)
 
     supabase.table("potholes").update({
+        "canonical_lat":  new_lat,
+        "canonical_lng":  new_lng,
         "severity_score": new_severity,
         "hit_count":      new_count,
         "last_seen":      detected_at.isoformat(),
@@ -644,9 +652,29 @@ def get_dlq(limit: int = 50):
 # DASHBOARD READ ENDPOINTS
 # =============================================================================
 
+MILES_TO_METRES = 1_609.344
+
+
 @app.get("/potholes", response_model=list[PotholeRecord])
-def get_potholes(min_priority: float = 0.0, limit: int = 200, offset: int = 0):
-    limit  = min(limit, 500)
+def get_potholes(
+    lat:          Optional[float] = None,
+    lng:          Optional[float] = None,
+    radius_miles: float           = 80.0,
+    min_priority: float           = 0.0,
+    limit:        int             = 200,
+    offset:       int             = 0,
+):
+    limit = min(limit, 500)
+
+    if lat is not None and lng is not None:
+        radius_m = radius_miles * MILES_TO_METRES
+        result   = supabase.rpc(
+            "get_potholes_near",
+            {"lat": lat, "lng": lng, "radius": radius_m},
+        ).execute()
+        data = [r for r in result.data if r["priority_score"] >= min_priority]
+        return data[offset: offset + limit]
+
     result = (
         supabase.table("potholes")
         .select("*")
@@ -659,16 +687,30 @@ def get_potholes(min_priority: float = 0.0, limit: int = 200, offset: int = 0):
 
 
 @app.get("/potholes/geojson")
-def get_potholes_geojson(min_priority: float = 0.0):
-    result = (
-        supabase.table("potholes")
-        .select(
-            "pothole_id, canonical_lat, canonical_lng, "
-            "severity_score, hit_count, priority_score, last_seen"
+def get_potholes_geojson(
+    lat:          Optional[float] = None,
+    lng:          Optional[float] = None,
+    radius_miles: float           = 80.0,
+    min_priority: float           = 0.0,
+):
+    if lat is not None and lng is not None:
+        radius_m = radius_miles * MILES_TO_METRES
+        result   = supabase.rpc(
+            "get_potholes_near",
+            {"lat": lat, "lng": lng, "radius": radius_m},
+        ).execute()
+        rows = [r for r in result.data if r["priority_score"] >= min_priority]
+    else:
+        result = (
+            supabase.table("potholes")
+            .select(
+                "pothole_id, canonical_lat, canonical_lng, "
+                "severity_score, hit_count, priority_score, last_seen"
+            )
+            .gte("priority_score", min_priority)
+            .execute()
         )
-        .gte("priority_score", min_priority)
-        .execute()
-    )
+        rows = result.data
 
     features = [
         {
@@ -685,7 +727,7 @@ def get_potholes_geojson(min_priority: float = 0.0):
                 "last_seen":      row["last_seen"],
             },
         }
-        for row in result.data
+        for row in rows
     ]
 
     return {"type": "FeatureCollection", "features": features}

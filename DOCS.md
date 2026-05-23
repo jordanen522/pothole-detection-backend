@@ -28,8 +28,9 @@ event_queue table  (Supabase/Postgres)
    ▼
 Queue Worker
    ├── FFT severity scoring  (8–20 Hz suspension band)
-   ├── Duplicate guard       (same device within 24 h)
-   ├── GPS clustering        (5 m radius via PostGIS)
+   ├── Duplicate guard       (same device + same location within 24 h)
+   ├── GPS clustering        (configurable radius via PostGIS)
+   ├── Centroid update       (rolling average lat/lng per cluster)
    └── Upsert → potholes + events tables
 
 Monitoring Snapshot Worker  (every 15 min)
@@ -68,8 +69,8 @@ Canonical, deduplicated pothole records. One row per unique road location.
 | Column | Type | Description |
 |---|---|---|
 | `pothole_id` | UUID PK | Auto-generated |
-| `canonical_lat` | float | Cluster centroid latitude |
-| `canonical_lng` | float | Cluster centroid longitude |
+| `canonical_lat` | float | Cluster centroid latitude — rolling average, updated on each hit |
+| `canonical_lng` | float | Cluster centroid longitude — rolling average, updated on each hit |
 | `severity_score` | float | Rolling average of hit severity scores (0–1) |
 | `hit_count` | int | Total number of device hits |
 | `priority_score` | float | Computed repair priority (severity × traffic weight) |
@@ -125,6 +126,7 @@ Producer-consumer queue. The `/events` endpoint writes here; the background work
 | Function | Description |
 |---|---|
 | `find_nearby_pothole(lat, lng, radius)` | Returns the nearest pothole within `radius` metres using PostGIS geography |
+| `get_potholes_near(lat, lng, radius)` | Returns all potholes within `radius` metres, ordered by priority score |
 | `get_queue_counts()` | Returns row counts grouped by status for the event_queue |
 | `get_db_size_mb()` | Returns current database size in MB |
 | `get_table_stats()` | Returns estimated row counts and sizes for core tables |
@@ -169,20 +171,36 @@ Ingest a pothole event. Returns `202 Accepted` immediately — processing happen
 ```
 
 #### `GET /potholes`
-Returns pothole records ordered by priority score descending.
+Returns pothole records ordered by priority score descending. When `lat` and `lng` are provided, results are filtered to within `radius_miles` of that point using PostGIS — recommended for all client requests to avoid returning unbounded data.
 
 | Query param | Default | Description |
 |---|---|---|
+| `lat` | — | Centre latitude for geographic filter |
+| `lng` | — | Centre longitude for geographic filter |
+| `radius_miles` | `80.0` | Search radius in miles (only applies when lat/lng provided) |
 | `min_priority` | `0.0` | Filter out potholes below this priority score |
 | `limit` | `200` | Max results (capped at 500) |
 | `offset` | `0` | Pagination offset |
 
+**Example:**
+```
+GET /potholes?lat=47.2529&lng=-122.4443&radius_miles=10
+```
+
 #### `GET /potholes/geojson`
-Returns all potholes as a GeoJSON `FeatureCollection`, ready to render on a map.
+Returns potholes as a GeoJSON `FeatureCollection`, ready to render on a map. Supports the same geographic filter as `/potholes`.
 
 | Query param | Default | Description |
 |---|---|---|
+| `lat` | — | Centre latitude for geographic filter |
+| `lng` | — | Centre longitude for geographic filter |
+| `radius_miles` | `80.0` | Search radius in miles (only applies when lat/lng provided) |
 | `min_priority` | `0.0` | Filter threshold |
+
+**Example:**
+```
+GET /potholes/geojson?lat=47.2529&lng=-122.4443&radius_miles=25
+```
 
 ### Monitoring
 
