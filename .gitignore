@@ -1,0 +1,18 @@
+# Virtual environment
+.venv/
+venv/
+
+# Secrets — never commit
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IntelliJ project files
+.idea/
+
+# Build artifacts
+*.egg-info/
+dist/

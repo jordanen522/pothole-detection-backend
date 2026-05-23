@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+numpy
+scipy
+shapely
+supabase==2.3.0
+python-dotenv
+pydantic
+httpcore>=1.0.8
+httpx>=0.28.0
