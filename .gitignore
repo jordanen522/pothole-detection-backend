@@ -2,6 +2,9 @@
 .venv/
 venv/
 
+# Temporary Files
+.temp/
+
 # Secrets — never commit
 .env
 
@@ -16,3 +19,6 @@ __pycache__/
 # Build artifacts
 *.egg-info/
 dist/
+
+# Supabase CLI local state
+supabase/

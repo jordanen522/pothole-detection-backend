@@ -209,8 +209,8 @@ def monitoring_history(hours: int = 24):
 def get_dlq(limit: int = 50):
     limit  = min(limit, 200)
     result = (
-        supabase.table("event_queue")
-        .select("id, device_id, retry_count, error_msg, created_at, updated_at")
+        supabase.table("nonanon_events")
+        .select("id, device_id_hash, retry_count, error_msg, created_at, updated_at")
         .eq("status", "dead_letter")
         .order("updated_at", desc=True)
         .limit(limit)

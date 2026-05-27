@@ -20,5 +20,6 @@ SAMPLE_RATE_HZ: int       = int(os.getenv("SAMPLE_RATE_HZ", "200"))
 SNAPSHOT_INTERVAL_S: int  = int(os.getenv("SNAPSHOT_INTERVAL_S", "900"))
 SNAPSHOT_RETENTION_H: int = int(os.getenv("SNAPSHOT_RETENTION_H", "24"))
 MILES_TO_METRES: float    = 1_609.344
+DEVICE_ID_SALT: str       = os.environ["DEVICE_ID_SALT"]
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
