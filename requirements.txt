@@ -7,3 +7,8 @@ supabase
 python-dotenv
 pydantic
 psutil
+
+# Testing
+pytest
+pytest-asyncio
+httpx
