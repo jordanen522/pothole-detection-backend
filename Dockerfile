@@ -5,8 +5,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY pothole_backend.py .
+COPY pothole_backend/ pothole_backend/
 
 EXPOSE 8000
 
-CMD ["uvicorn", "pothole_backend:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "pothole_backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
